@@ -24,3 +24,10 @@ class User(Base):
     password= Column(String ,nullable=False)
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Votes(Base):
+    __tablename__="Votes"
+
+    user_id= Column(Integer, ForeignKey("Users.id", ondelete="CASCADE"), primary_key=True)
+    book_id= Column(Integer, ForeignKey("Book.id", ondelete="CASCADE"), primary_key=True)

@@ -1,15 +1,16 @@
-from typing import Optional
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 from fastapi.encoders import jsonable_encoder
+from sqlalchemy.sql.functions import count
 
 from app.DBConnection import get_db
-from app.model import Book as BookModel        # SQLAlchemy Model
+from app.model import Book as BookModel, Votes  # SQLAlchemy Model
 from app.schemas import Book as BookSchema, BookCreate  # Pydantic Models
 from app import oauth2
 from app.redis_client import set_cache, get_cache, delete_cache
+
+from sqlalchemy import func
 
 router = APIRouter(
     prefix="/books",
@@ -42,7 +43,7 @@ def create_book(
 
 @router.get("/getBooks")
 def getBooks(db: Session = Depends(get_db), current_user: int = Depends(oauth2.get_current_users), limit: int =10,skip : int =0,
-             use_cache: bool = True, search : Optional[int] = ""):
+             use_cache: bool = True):
     ## I want list of all the books irespective of current user so didn't added any check based on logged-in user
     #cache_key = "books:all"
     cache_key = f"books:all:limit:{limit}:skip:{skip}"
@@ -63,6 +64,17 @@ def getBooks(db: Session = Depends(get_db), current_user: int = Depends(oauth2.g
     ##    books = db.query(BookModel).filter(BookModel.id == current_user.id ).all()
     data = jsonable_encoder(books)
 
+    results = (db.query(BookModel, count(BookModel.id).label("votes")).join(Votes, Votes.book_id == BookModel.id,
+                                                                           isouter=True)
+               .group_by(BookModel.id).limit(limit).offset(skip).all())
+
+    serialized = []
+    for book, votes in results:
+        item = jsonable_encoder(book)
+        item["votes"] = votes
+        serialized.append(item)
+
+
     if use_cache:
         print("---- Redis Debug ----")
         print("Using cache:", use_cache)
@@ -70,8 +82,8 @@ def getBooks(db: Session = Depends(get_db), current_user: int = Depends(oauth2.g
         print("Saving data:", data)
         set_cache(cache_key, data, expiry_seconds=120)
 
-    return {"data": data, "source": "database"}
-
+    ##return {"data": data, "source": "database"}
+    return {"data": serialized, "source": "database"}
 
 
 @router.get("/getBooks/{id}")
@@ -84,7 +96,7 @@ def getBook(id: int, db: Session = Depends(get_db), current_user: int = Depends(
         return {"book_details": cached_data, "source": "redis"}
 
     book = db.query(BookModel).filter(BookModel.id == id).first()
-
+    results= db.query(BookModel).join(Votes,Votes.book_id == BookModel.id,isouter=True).group_by(BookModel.id)
     if not book:
         raise HTTPException(status_code=404, detail="Book not found")
 

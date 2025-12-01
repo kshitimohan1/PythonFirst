@@ -10,13 +10,14 @@ from starlette import status
 
 from app import model
 from app.DBConnection import get_db
+from app.config import settings
 from app.schemas import TokenData
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 
-Secret_Key= "09ajs23edfj246ks235j5smn0593n2ax5fw290alcba321jallqopznsy442nw"
-ALGORITHM="HS256"
-ACCESS_TOKEN_EXPIRES_MINUTES= 30
+Secret_Key= settings.secret_key
+ALGORITHM=settings.algorithm
+ACCESS_TOKEN_EXPIRES_MINUTES= settings.access_token_expires_minutes
 
 def create_access_token(data: dict):
     to_encode = data.copy()
